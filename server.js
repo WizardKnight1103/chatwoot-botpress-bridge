@@ -4,7 +4,7 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// REEMPLAZA CON TUS TOKENS REALES ENTRE COMILLAS
+// REEMPLAZA CON TUS TOKENS REALES
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4';
 const BOTPRESS_BOT_ID = '84e3f57b-7710-4c3e-a647-a46a637c1938';
@@ -39,64 +39,49 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // 1. Crear o asegurar usuario en el canal 'chat'
+      // 1. Crear o asegurar usuario en el canal 'webchat'
       const userRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/users',
         {
-          integrationName: 'chat',
+          integrationName: 'webchat',
           tags: { chatwoot_sender_id: String(senderId) }
         },
         { headers: bpHeaders }
       );
       const bpUserId = userRes.data?.user?.id;
 
-      // 2. Crear o asegurar conversación en el canal 'chat'
+      // 2. Crear o asegurar conversación en el canal 'webchat'
       const convRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/conversations',
         {
-          integrationName: 'chat',
-          tags: { chatwoot_conversation_id: String(conversationId) }
+          integrationName: 'webchat',
+          tags: { 
+            chatwoot_conversation_id: String(conversationId),
+            chatwoot_account_id: String(accountId)
+          }
         },
         { headers: bpHeaders }
       );
       const bpConvId = convRes.data?.conversation?.id;
 
       // 3. Enviar mensaje al agente
-      const msgRes = await axios.post(
+      await axios.post(
         'https://api.botpress.cloud/v1/chat/messages',
         {
           conversationId: bpConvId,
           userId: bpUserId,
           type: 'text',
           payload: { text: userMessage },
-          tags: { source: 'chatwoot' }
+          tags: { 
+            source: 'chatwoot',
+            conversationId: String(conversationId),
+            accountId: String(accountId)
+          }
         },
         { headers: bpHeaders }
       );
 
-      // Extraer el texto devuelto por el agente
-      const botReply =
-        msgRes.data?.message?.payload?.text ||
-        msgRes.data?.payload?.text ||
-        msgRes.data?.responses?.[0]?.text;
-
-      if (botReply) {
-        // 4. Enviar respuesta a Chatwoot
-        await axios.post(
-          `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
-          {
-            content: botReply,
-            message_type: 'outgoing',
-            private: false
-          },
-          {
-            headers: {
-              api_access_token: CHATWOOT_API_TOKEN,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-      }
+      console.log(`Mensaje enviado con éxito a Botpress para la conversación ${conversationId}`);
     } catch (err) {
       console.error(
         'Error procesando webhook:',
