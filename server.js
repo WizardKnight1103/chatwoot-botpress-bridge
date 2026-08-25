@@ -8,6 +8,7 @@ app.use(express.json());
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4'; // Chatwoot -> Tu perfil -> Token de acceso
 const BOTPRESS_BOT_ID = '84e3f57b-7710-4c3e-a647-a46a637c1938';
+const BOTPRESS_PAT = 'bp_pat_Y6G8i5hJnM6IBd26uCpZJLDOTRvuRBE30eQK'; // Botpress Cloud -> User Profile -> Personal Access Tokens
 
 app.post('/chatwoot-webhook', async (req, res) => {
   res.status(200).send('OK'); // Responder rápido a Chatwoot para evitar timeout
