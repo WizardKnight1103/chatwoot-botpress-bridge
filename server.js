@@ -7,8 +7,9 @@ app.use(express.json());
 // REEMPLAZA CON TUS TOKENS REALES
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4';
-const BOTPRESS_BOT_ID = '84e3f57b-7710-4c3e-a647-a46a637c1938';
-const BOTPRESS_PAT = 'bp_pat_Y6G8i5hJnM6IBd26uCpZJLDOTRvuRBE30eQK';
+
+// Client ID del canal Webchat obtenido de Advanced
+const WEBCHAT_CLIENT_ID = '6f30aa3c-4cd2-45e9-9f24-61d6d4d9a17f';
 
 app.get('/', (req, res) => {
   res.send('Servidor Webhook Puente Activo');
@@ -33,66 +34,61 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      console.log(`[1/3] Enviando mensaje a Botpress: "${userMessage}"`);
+      console.log(`[1/3] Procesando mensaje: "${userMessage}" (Chatwoot Conv: ${conversationId})`);
 
-      // 1. Enviar mensaje a Botpress Cloud
-      const bpResponse = await axios.post(
-        `https://webhook.botpress.cloud/${BOTPRESS_BOT_ID}`,
+      // 1. Obtener / Crear usuario de Webchat con el Client ID
+      const userRes = await axios.post(
+        'https://chat.botpress.cloud/v1/users',
+        {},
         {
-          type: 'text',
-          text: userMessage,
-          conversationId: `chatwoot_conv_${conversationId}`,
-          userId: `chatwoot_user_${senderId}`
+          headers: {
+            'x-user-key': `cw_user_${senderId}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      const userKey = userRes.data?.key;
+      const bpUserToken = userRes.data?.user?.id;
+
+      // 2. Obtener / Crear conversación
+      const convRes = await axios.post(
+        'https://chat.botpress.cloud/v1/conversations',
+        {},
+        {
+          headers: {
+            'x-user-key': userKey,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      const bpConvId = convRes.data?.conversation?.id;
+
+      // 3. Enviar el mensaje adjuntando el ID de la conversación de Chatwoot
+      const messageContent = `[Chatwoot conv_id: ${conversationId}] ${userMessage}`;
+
+      await axios.post(
+        'https://chat.botpress.cloud/v1/messages',
+        {
+          conversationId: bpConvId,
+          payload: {
+            type: 'text',
+            text: messageContent
+          }
         },
         {
           headers: {
-            'Authorization': `Bearer ${BOTPRESS_PAT}`,
+            'x-user-key': userKey,
             'Content-Type': 'application/json'
           }
         }
       );
 
-      console.log('[2/3] Respuesta bruta de Botpress:', JSON.stringify(bpResponse.data));
-
-      // 2. Extraer el texto de la respuesta
-      let replyText = '';
-      if (bpResponse.data?.responses && Array.isArray(bpResponse.data.responses)) {
-        replyText = bpResponse.data.responses
-          .map(r => r.text || r.payload?.text)
-          .filter(Boolean)
-          .join('\n\n');
-      } else if (bpResponse.data?.messages && Array.isArray(bpResponse.data.messages)) {
-        replyText = bpResponse.data.messages
-          .map(m => m.payload?.text || m.text)
-          .filter(Boolean)
-          .join('\n\n');
-      } else if (typeof bpResponse.data === 'string') {
-        replyText = bpResponse.data;
-      }
-
-      // 3. Enviar a Chatwoot si se obtuvo texto
-      if (replyText) {
-        console.log(`[3/3] Enviando respuesta a Chatwoot: "${replyText.substring(0, 40)}..."`);
-        await axios.post(
-          `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
-          {
-            content: replyText,
-            message_type: 'outgoing',
-            private: false
-          },
-          {
-            headers: {
-              'api_access_token': CHATWOOT_API_TOKEN,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        console.log(`¡Mensaje entregado con éxito en Chatwoot (Conv: ${conversationId})!`);
-      } else {
-        console.log('Botpress no retornó texto directo en la llamada.');
-      }
+      console.log(`[2/3] Mensaje entregado al agente de Botpress correctamente.`);
     } catch (err) {
-      console.error('Error en el flujo del puente:', err.response?.data || err.message);
+      console.error(
+        'Error en el flujo del puente:',
+        err.response?.data || err.message
+      );
     }
   }
 });
