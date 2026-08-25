@@ -16,7 +16,6 @@ const bpHeaders = {
   'Content-Type': 'application/json'
 };
 
-// Ruta de comprobación de estado (healthcheck)
 app.get('/', (req, res) => {
   res.send('Servidor Webhook Puente Activo');
 });
@@ -40,23 +39,29 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // 1. Obtener o crear usuario
+      // 1. Crear o asegurar usuario en el canal 'chat'
       const userRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/users',
-        { tags: { chatwoot_sender_id: String(senderId) } },
+        {
+          integrationName: 'chat',
+          tags: { chatwoot_sender_id: String(senderId) }
+        },
         { headers: bpHeaders }
       );
       const bpUserId = userRes.data?.user?.id;
 
-      // 2. Obtener o crear conversación
+      // 2. Crear o asegurar conversación en el canal 'chat'
       const convRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/conversations',
-        { tags: { chatwoot_conversation_id: String(conversationId) } },
+        {
+          integrationName: 'chat',
+          tags: { chatwoot_conversation_id: String(conversationId) }
+        },
         { headers: bpHeaders }
       );
       const bpConvId = convRes.data?.conversation?.id;
 
-      // 3. Enviar mensaje a Botpress
+      // 3. Enviar mensaje al agente
       const msgRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/messages',
         {
@@ -69,13 +74,14 @@ app.post('/chatwoot-webhook', async (req, res) => {
         { headers: bpHeaders }
       );
 
+      // Extraer el texto devuelto por el agente
       const botReply =
         msgRes.data?.message?.payload?.text ||
         msgRes.data?.payload?.text ||
         msgRes.data?.responses?.[0]?.text;
 
       if (botReply) {
-        // 4. Responder a Chatwoot
+        // 4. Enviar respuesta a Chatwoot
         await axios.post(
           `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
           {
@@ -100,7 +106,6 @@ app.post('/chatwoot-webhook', async (req, res) => {
   }
 });
 
-// Railway asigna el puerto automáticamente mediante process.env.PORT
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor activo en el puerto ${PORT}`);
