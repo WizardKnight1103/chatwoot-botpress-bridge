@@ -33,32 +33,38 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // 1. Enviar el mensaje directamente a la API de conversación del bot
+      // Endpoint de ejecución directa para Botpress Viber / Cloud
       const response = await axios.post(
-        `https://api.botpress.cloud/v1/bots/${BOTPRESS_BOT_ID}/converse`,
+        `https://webhook.botpress.cloud/${BOTPRESS_BOT_ID}`,
         {
+          type: 'text',
           text: userMessage,
-          userId: `cw_user_${senderId}`,
-          conversationId: `cw_conv_${conversationId}`
+          conversationId: `cw_conv_${conversationId}`,
+          userId: `cw_user_${senderId}`
         },
         {
           headers: {
             'Authorization': `Bearer ${BOTPRESS_PAT}`,
-            'x-bot-id': BOTPRESS_BOT_ID,
             'Content-Type': 'application/json'
           }
         }
       );
 
-      // 2. Extraer la respuesta del bot
-      const botResponses = response.data?.responses || [];
-      const botText = botResponses
-        .map(r => r.text || r.payload?.text)
-        .filter(Boolean)
-        .join('\n\n');
+      // Extraer la respuesta generada
+      const botResponses = response.data?.responses || response.data?.messages || [];
+      let botText = '';
+
+      if (Array.isArray(botResponses)) {
+        botText = botResponses
+          .map(r => r.text || r.payload?.text)
+          .filter(Boolean)
+          .join('\n\n');
+      } else if (typeof response.data === 'string') {
+        botText = response.data;
+      }
 
       if (botText) {
-        // 3. Enviar la respuesta directa a Chatwoot
+        // Enviar respuesta a Chatwoot
         await axios.post(
           `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
           {
@@ -73,9 +79,9 @@ app.post('/chatwoot-webhook', async (req, res) => {
             }
           }
         );
-        console.log(`Respuesta enviada a Chatwoot para la conversación ${conversationId}`);
+        console.log(`Respuesta entregada a Chatwoot (Conv: ${conversationId})`);
       } else {
-        console.log('El bot no generó texto de respuesta.');
+        console.log('Mensaje recibido en Botpress, procesando respuesta.');
       }
     } catch (err) {
       console.error(
