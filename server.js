@@ -4,7 +4,7 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// REEMPLAZA CON TUS TOKENS REALES
+// REEMPLAZA CON TUS VALORES REALES
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4';
 const WEBCHAT_CLIENT_ID = '6f30aa3c-4cd2-45e9-9f24-61d6d4d9a17f';
@@ -13,10 +13,10 @@ app.get('/', (req, res) => {
   res.send('Servidor Webhook Puente Activo');
 });
 
-// Función para esperar la respuesta de Botpress
-async function pollBotpressResponse(userKey, conversationId, afterMessageId, maxAttempts = 12) {
+// Función para consultar la respuesta generada por Botpress (Polling)
+async function pollBotpressResponse(userKey, conversationId, maxAttempts = 10) {
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Esperar 1.5s entre intentos
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     try {
       const res = await axios.get(
@@ -29,15 +29,16 @@ async function pollBotpressResponse(userKey, conversationId, afterMessageId, max
       );
 
       const messages = res.data?.messages || [];
-      // Buscar mensajes generados por el bot posteriores al mensaje del usuario
-      const botMessages = messages.filter(m => m.userId !== res.data?.userId && m.payload?.text);
+      // Filtrar mensajes que no sean del usuario y que tengan texto
+      const botMessages = messages.filter(
+        (m) => m.userId !== res.data?.userId && m.payload?.text
+      );
 
       if (botMessages.length > 0) {
-        // Tomar el mensaje más reciente del bot
         return botMessages[botMessages.length - 1].payload.text;
       }
     } catch (e) {
-      // Reintentar si aún no procesa
+      // Continuar reintentando si aún no está lista la respuesta
     }
   }
   return null;
@@ -62,19 +63,83 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      console.log(`[1/4] Procesando mensaje: "${userMessage}" (Chatwoot Conv: ${conversationId})`);
+      console.log(`[1/4] Mensaje entrante: "${userMessage}" (Chatwoot Conv: ${conversationId})`);
 
-      // 1. Obtener / Crear usuario de Webchat
+      // 1. Obtener / Crear usuario en Botpress Webchat
       const userRes = await axios.post(
         'https://chat.botpress.cloud/v1/users',
         {},
         {
           headers: {
-            'x-user-key': `cw_user_${ shameEl bridge entregó el mensaje a Botpress con éxito `[2/3]`, pero el flujo se detiene porque Botpress aún no envía su respuesta de regreso al bridge (webhook) o el agente no generó salida. 
+            'x-user-key': `cw_user_${senderId}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      const userKey = userRes.data?.key;
 
-Revisa estos puntos clave para resolverlo:
+      // 2. Obtener / Crear conversación en Botpress
+      const convRes = await axios.post(
+        'https://chat.botpress.cloud/v1/conversations',
+        {},
+        {
+          headers: {
+            'x-user-key': userKey,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      const bpConvId = convRes.data?.conversation?.id;
 
-* **Webhook de salida en Botpress:** En tu flujo o bot de Botpress, debes asegurarte de que el mensaje de respuesta se envíe de vuelta a tu URL pública de Railway:
-  `https://chatwoot-botpress-bridge-production-d65a.up.railway.app/webhook` (o la ruta que tenga configurada tu script para escuchar las respuestas del bot).
-* **Logs del Bot en Botpress Cloud/Studio:** Entra a la consola de Botpress y revisa los logs de ejecución. Verifica si el mensaje `"Hola quiero información"` activó un nodo de respuesta o si ocurrió un error interno al procesar el mensaje.
-* **Cambios sin desplegar en Railway:** En la esquina superior izquierda aparece un botón morado que dice **"Apply 4 changes"**. Si modificaste variables de entorno o configuraciones recientemente, dale clic a **Deploy** para aplicar los cambios en el contenedor activo.
+      // 3. Enviar mensaje a Botpress
+      await axios.post(
+        'https://chat.botpress.cloud/v1/messages',
+        {
+          conversationId: bpConvId,
+          payload: {
+            type: 'text',
+            text: userMessage
+          }
+        },
+        {
+          headers: {
+            'x-user-key': userKey,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      console.log(`[2/4] Mensaje entregado a Botpress. Esperando respuesta...`);
+
+      // 4. Polling para obtener la respuesta del bot y enviarla a Chatwoot
+      const botReply = await pollBotpressResponse(userKey, bpConvId);
+
+      if (botReply) {
+        console.log(`[3/4] Respuesta generada por Botpress: "${botReply.substring(0, 40)}..."`);
+        await axios.post(
+          `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
+          {
+            content: botReply,
+            message_type: 'outgoing',
+            private: false
+          },
+          {
+            headers: {
+              api_access_token: CHATWOOT_API_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        console.log(`[4/4] ¡Respuesta enviada a Chatwoot con éxito!`);
+      } else {
+        console.log('Botpress no generó respuesta a tiempo.');
+      }
+    } catch (err) {
+      console.error('Error en el puente:', err.response?.data || err.message);
+    }
+  }
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor activo en el puerto ${PORT}`);
+});
