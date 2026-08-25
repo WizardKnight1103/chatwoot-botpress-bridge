@@ -39,46 +39,51 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // 1. Crear o recuperar usuario mediante key única
+      // 1. Crear usuario asegurando el campo 'tags'
       const userRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/users',
         {
-          key: `chatwoot_user_${senderId}`
+          key: `chatwoot_user_${senderId}`,
+          tags: {
+            sender_id: String(senderId)
+          }
         },
         { headers: bpHeaders }
       );
       const bpUserId = userRes.data?.user?.id;
 
-      // 2. Crear o recuperar conversación
+      // 2. Crear conversación asegurando el campo 'tags'
       const convRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/conversations',
         {
           tags: {
-            chatwoot_conv_id: String(conversationId)
+            conversation_id: String(conversationId),
+            account_id: String(accountId)
           }
         },
         { headers: bpHeaders }
       );
       const bpConvId = convRes.data?.conversation?.id;
 
-      // 3. Enviar mensaje al agente
+      // 3. Enviar mensaje incluyendo el conversation_id en el texto para el agente
       await axios.post(
         'https://api.botpress.cloud/v1/chat/messages',
         {
           conversationId: bpConvId,
           userId: bpUserId,
           type: 'text',
-          payload: { text: userMessage },
+          payload: {
+            text: `[Chatwoot conv_id: ${conversationId}] ${userMessage}`
+          },
           tags: {
             source: 'chatwoot',
-            chatwoot_conversation_id: String(conversationId),
-            chatwoot_account_id: String(accountId)
+            chatwoot_conversation_id: String(conversationId)
           }
         },
         { headers: bpHeaders }
       );
 
-      console.log(`Mensaje enviado con éxito a Botpress (Conversación Chatwoot: ${conversationId})`);
+      console.log(`Mensaje procesado con éxito para Chatwoot (Conversación: ${conversationId})`);
     } catch (err) {
       console.error(
         'Error procesando webhook:',
