@@ -39,25 +39,22 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // 1. Crear o asegurar usuario en el canal 'webchat'
+      // 1. Crear o recuperar usuario mediante key única
       const userRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/users',
         {
-          integrationName: 'webchat',
-          tags: { chatwoot_sender_id: String(senderId) }
+          key: `chatwoot_user_${senderId}`
         },
         { headers: bpHeaders }
       );
       const bpUserId = userRes.data?.user?.id;
 
-      // 2. Crear o asegurar conversación en el canal 'webchat'
+      // 2. Crear o recuperar conversación
       const convRes = await axios.post(
         'https://api.botpress.cloud/v1/chat/conversations',
         {
-          integrationName: 'webchat',
-          tags: { 
-            chatwoot_conversation_id: String(conversationId),
-            chatwoot_account_id: String(accountId)
+          tags: {
+            chatwoot_conv_id: String(conversationId)
           }
         },
         { headers: bpHeaders }
@@ -72,16 +69,16 @@ app.post('/chatwoot-webhook', async (req, res) => {
           userId: bpUserId,
           type: 'text',
           payload: { text: userMessage },
-          tags: { 
+          tags: {
             source: 'chatwoot',
-            conversationId: String(conversationId),
-            accountId: String(accountId)
+            chatwoot_conversation_id: String(conversationId),
+            chatwoot_account_id: String(accountId)
           }
         },
         { headers: bpHeaders }
       );
 
-      console.log(`Mensaje enviado con éxito a Botpress para la conversación ${conversationId}`);
+      console.log(`Mensaje enviado con éxito a Botpress (Conversación Chatwoot: ${conversationId})`);
     } catch (err) {
       console.error(
         'Error procesando webhook:',
