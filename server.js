@@ -10,12 +10,6 @@ const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4';
 const BOTPRESS_BOT_ID = '84e3f57b-7710-4c3e-a647-a46a637c1938';
 const BOTPRESS_PAT = 'bp_pat_Y6G8i5hJnM6IBd26uCpZJLDOTRvuRBE30eQK';
 
-const bpHeaders = {
-  Authorization: `Bearer ${BOTPRESS_PAT}`,
-  'x-bot-id': BOTPRESS_BOT_ID,
-  'Content-Type': 'application/json'
-};
-
 app.get('/', (req, res) => {
   res.send('Servidor Webhook Puente Activo');
 });
@@ -39,54 +33,53 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // 1. Crear usuario asegurando el campo 'tags'
-      const userRes = await axios.post(
-        'https://api.botpress.cloud/v1/chat/users',
+      // 1. Enviar el mensaje directamente a la API de conversación del bot
+      const response = await axios.post(
+        `https://api.botpress.cloud/v1/bots/${BOTPRESS_BOT_ID}/converse`,
         {
-          key: `chatwoot_user_${senderId}`,
-          tags: {
-            sender_id: String(senderId)
-          }
+          text: userMessage,
+          userId: `cw_user_${senderId}`,
+          conversationId: `cw_conv_${conversationId}`
         },
-        { headers: bpHeaders }
-      );
-      const bpUserId = userRes.data?.user?.id;
-
-      // 2. Crear conversación asegurando el campo 'tags'
-      const convRes = await axios.post(
-        'https://api.botpress.cloud/v1/chat/conversations',
         {
-          tags: {
-            conversation_id: String(conversationId),
-            account_id: String(accountId)
+          headers: {
+            'Authorization': `Bearer ${BOTPRESS_PAT}`,
+            'x-bot-id': BOTPRESS_BOT_ID,
+            'Content-Type': 'application/json'
           }
-        },
-        { headers: bpHeaders }
+        }
       );
-      const bpConvId = convRes.data?.conversation?.id;
 
-      // 3. Enviar mensaje incluyendo el conversation_id en el texto para el agente
-      await axios.post(
-        'https://api.botpress.cloud/v1/chat/messages',
-        {
-          conversationId: bpConvId,
-          userId: bpUserId,
-          type: 'text',
-          payload: {
-            text: `[Chatwoot conv_id: ${conversationId}] ${userMessage}`
+      // 2. Extraer la respuesta del bot
+      const botResponses = response.data?.responses || [];
+      const botText = botResponses
+        .map(r => r.text || r.payload?.text)
+        .filter(Boolean)
+        .join('\n\n');
+
+      if (botText) {
+        // 3. Enviar la respuesta directa a Chatwoot
+        await axios.post(
+          `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
+          {
+            content: botText,
+            message_type: 'outgoing',
+            private: false
           },
-          tags: {
-            source: 'chatwoot',
-            chatwoot_conversation_id: String(conversationId)
+          {
+            headers: {
+              'api_access_token': CHATWOOT_API_TOKEN,
+              'Content-Type': 'application/json'
+            }
           }
-        },
-        { headers: bpHeaders }
-      );
-
-      console.log(`Mensaje procesado con éxito para Chatwoot (Conversación: ${conversationId})`);
+        );
+        console.log(`Respuesta enviada a Chatwoot para la conversación ${conversationId}`);
+      } else {
+        console.log('El bot no generó texto de respuesta.');
+      }
     } catch (err) {
       console.error(
-        'Error procesando webhook:',
+        'Error en el puente:',
         err.response?.data || err.message
       );
     }
