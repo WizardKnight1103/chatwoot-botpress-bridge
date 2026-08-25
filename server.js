@@ -33,14 +33,16 @@ app.post('/chatwoot-webhook', async (req, res) => {
     if (!userMessage || !conversationId || !accountId) return;
 
     try {
-      // Endpoint de ejecución directa para Botpress Viber / Cloud
-      const response = await axios.post(
+      console.log(`[1/3] Enviando mensaje a Botpress: "${userMessage}"`);
+
+      // 1. Enviar mensaje a Botpress Cloud
+      const bpResponse = await axios.post(
         `https://webhook.botpress.cloud/${BOTPRESS_BOT_ID}`,
         {
           type: 'text',
           text: userMessage,
-          conversationId: `cw_conv_${conversationId}`,
-          userId: `cw_user_${senderId}`
+          conversationId: `chatwoot_conv_${conversationId}`,
+          userId: `chatwoot_user_${senderId}`
         },
         {
           headers: {
@@ -50,25 +52,31 @@ app.post('/chatwoot-webhook', async (req, res) => {
         }
       );
 
-      // Extraer la respuesta generada
-      const botResponses = response.data?.responses || response.data?.messages || [];
-      let botText = '';
+      console.log('[2/3] Respuesta bruta de Botpress:', JSON.stringify(bpResponse.data));
 
-      if (Array.isArray(botResponses)) {
-        botText = botResponses
+      // 2. Extraer el texto de la respuesta
+      let replyText = '';
+      if (bpResponse.data?.responses && Array.isArray(bpResponse.data.responses)) {
+        replyText = bpResponse.data.responses
           .map(r => r.text || r.payload?.text)
           .filter(Boolean)
           .join('\n\n');
-      } else if (typeof response.data === 'string') {
-        botText = response.data;
+      } else if (bpResponse.data?.messages && Array.isArray(bpResponse.data.messages)) {
+        replyText = bpResponse.data.messages
+          .map(m => m.payload?.text || m.text)
+          .filter(Boolean)
+          .join('\n\n');
+      } else if (typeof bpResponse.data === 'string') {
+        replyText = bpResponse.data;
       }
 
-      if (botText) {
-        // Enviar respuesta a Chatwoot
+      // 3. Enviar a Chatwoot si se obtuvo texto
+      if (replyText) {
+        console.log(`[3/3] Enviando respuesta a Chatwoot: "${replyText.substring(0, 40)}..."`);
         await axios.post(
           `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
           {
-            content: botText,
+            content: replyText,
             message_type: 'outgoing',
             private: false
           },
@@ -79,15 +87,12 @@ app.post('/chatwoot-webhook', async (req, res) => {
             }
           }
         );
-        console.log(`Respuesta entregada a Chatwoot (Conv: ${conversationId})`);
+        console.log(`¡Mensaje entregado con éxito en Chatwoot (Conv: ${conversationId})!`);
       } else {
-        console.log('Mensaje recibido en Botpress, procesando respuesta.');
+        console.log('Botpress no retornó texto directo en la llamada.');
       }
     } catch (err) {
-      console.error(
-        'Error en el puente:',
-        err.response?.data || err.message
-      );
+      console.error('Error en el flujo del puente:', err.response?.data || err.message);
     }
   }
 });
