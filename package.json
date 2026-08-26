@@ -1,7 +1,7 @@
 {
-  "name": "chatwoot-gemini-bridge",
+  "name": "chatwoot-bait-bridge",
   "version": "1.0.0",
-  "description": "Bridge directo entre Chatwoot y Google Gemini",
+  "description": "Bridge directo para WhatsApp Bait en Chatwoot",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
