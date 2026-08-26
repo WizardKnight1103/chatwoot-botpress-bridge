@@ -1,6 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 app.use(express.json());
@@ -9,8 +8,7 @@ const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
+// BASE DE CONOCIMIENTO BAIT
 const SYSTEM_INSTRUCTION = `
 Eres el Asistente Virtual Oficial de Bait en WhatsApp. Tu objetivo es brindar atención rápida, amable y concreta sobre portabilidad, paquetes, recargas y soporte.
 
@@ -89,7 +87,7 @@ ACTIVACIÓN DEL CHIP (POST-COMPRA):
 `;
 
 app.get('/', (req, res) => {
-  res.send('Servidor Gemini Bait Activo');
+  res.send('Servidor Bait IA Activo');
 });
 
 app.post('/chatwoot-webhook', async (req, res) => {
@@ -112,18 +110,30 @@ app.post('/chatwoot-webhook', async (req, res) => {
     try {
       console.log(`[Chatwoot Conv ${conversationId}] Mensaje entrante: "${userMessage}"`);
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userMessage,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+      // Llamada REST directa a la API de Gemini
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      
+      const payload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: userMessage }]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: SYSTEM_INSTRUCTION }]
+        },
+        generationConfig: {
           temperature: 0.3
         }
-      });
+      };
 
-      const reply = response.text;
+      const geminiRes = await axios.post(geminiUrl, payload);
+      const reply = geminiRes.data.candidates[0].content.parts[0].text;
+
       console.log(`[Chatwoot Conv ${conversationId}] Respuesta Gemini: "${reply.substring(0, 45)}..."`);
 
+      // Enviar a Chatwoot
       await axios.post(
         `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
         {
@@ -141,7 +151,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
 
       console.log(`[Chatwoot Conv ${conversationId}] Mensaje entregado con éxito.`);
     } catch (err) {
-      console.error('Error procesando webhook:', err.response?.data || err.message);
+      console.error('Error en webhook/Gemini:', err.response?.data || err.message);
     }
   }
 });
