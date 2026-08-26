@@ -1,16 +1,16 @@
 const express = require('express');
 const axios = require('axios');
-const { GoogleGenAI } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.use(express.json());
 
-// REEMPLAZA CON TUS CREDENCIALES
+// LECTURA DE VARIABLES DE ENTORNO
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // BASE DE CONOCIMIENTO EXTRAÍDA DEL PDF OFICIAL DE BAIT
 const SYSTEM_INSTRUCTION = `
@@ -90,6 +90,11 @@ ACTIVACIÓN DEL CHIP (POST-COMPRA):
   Si requiere ayuda con APN, invítalo a escribir 'CONFIGURAR' o pedir un 'ASESOR'.
 `;
 
+const model = genAI.getGenerativeModel({
+  model: 'gemini-1.5-flash',
+  systemInstruction: SYSTEM_INSTRUCTION
+});
+
 app.get('/', (req, res) => {
   res.send('Servidor Gemini Bait Activo');
 });
@@ -114,20 +119,12 @@ app.post('/chatwoot-webhook', async (req, res) => {
     try {
       console.log(`[Chatwoot Conv ${conversationId}] Mensaje entrante: "${userMessage}"`);
 
-      // 1. Llamada a Gemini 2.5 Flash
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userMessage,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.3
-        }
-      });
+      // 1. Generar respuesta con Gemini
+      const result = await model.generateContent(userMessage);
+      const reply = result.response.text();
+      console.log(`[Chatwoot Conv ${conversationId}] Respuesta generada: "${reply.substring(0, 45)}..."`);
 
-      const reply = response.text;
-      console.log(`[Chatwoot Conv ${conversationId}] Respuesta Gemini: "${reply.substring(0, 45)}..."`);
-
-      // 2. Enviar respuesta directa a Chatwoot
+      // 2. Enviar a Chatwoot
       await axios.post(
         `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
         {
@@ -143,7 +140,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
         }
       );
 
-      console.log(`[Chatwoot Conv ${conversationId}] Mensaje entregado a WhatsApp con éxito.`);
+      console.log(`[Chatwoot Conv ${conversationId}] Mensaje entregado con éxito.`);
     } catch (err) {
       console.error('Error procesando el webhook:', err.response?.data || err.message);
     }
