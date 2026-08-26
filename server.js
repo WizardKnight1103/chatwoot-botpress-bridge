@@ -4,7 +4,6 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// REEMPLAZA CON TUS VALORES REALES
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4';
 const WEBCHAT_CLIENT_ID = '6f30aa3c-4cd2-45e9-9f24-61d6d4d9a17f';
@@ -13,8 +12,8 @@ app.get('/', (req, res) => {
   res.send('Servidor Webhook Puente Activo');
 });
 
-// Función de polling para esperar la respuesta generada por el agente
-async function pollBotpressResponse(userKey, conversationId, userMessageId, maxAttempts = 12) {
+// Polling con log visible de la estructura de Botpress
+async function pollBotpressResponse(userKey, conversationId, userMsgId, maxAttempts = 12) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
@@ -29,16 +28,16 @@ async function pollBotpressResponse(userKey, conversationId, userMessageId, maxA
       );
 
       const messages = res.data?.messages || [];
-      // Filtrar mensajes que provengan del bot y tengan contenido de texto
-      const botMessages = messages.filter(
-        (m) => m.id !== userMessageId && m.userId !== res.data?.userId && m.payload?.text
-      );
+      console.log(`[Sondeo ${i + 1}] Mensajes en Botpress:`, messages.length);
 
-      if (botMessages.length > 0) {
-        return botMessages[0].payload.text;
+      // Buscar mensajes que no sean el que envió el usuario
+      const botMsg = messages.find(m => m.id !== userMsgId && (m.payload?.text || m.text));
+
+      if (botMsg) {
+        return botMsg.payload?.text || botMsg.text;
       }
     } catch (e) {
-      // Continuar esperando si la respuesta aún no termina de generarse
+      console.log(`[Sondeo ${i + 1}] Error al consultar mensajes:`, e.response?.data || e.message);
     }
   }
   return null;
@@ -65,7 +64,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
     try {
       console.log(`[1/4] Mensaje entrante: "${userMessage}" (Chatwoot Conv: ${conversationId})`);
 
-      // 1. Obtener / Crear usuario de Webchat vinculado al Client ID
+      // 1. Crear / Obtener usuario
       const userRes = await axios.post(
         'https://chat.botpress.cloud/v1/users',
         {},
@@ -79,7 +78,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
       );
       const userKey = userRes.data?.key;
 
-      // 2. Obtener / Crear conversación
+      // 2. Crear / Obtener conversación
       const convRes = await axios.post(
         'https://chat.botpress.cloud/v1/conversations',
         {},
@@ -93,7 +92,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
       );
       const bpConvId = convRes.data?.conversation?.id;
 
-      // 3. Enviar mensaje del usuario a Botpress
+      // 3. Enviar mensaje a Botpress
       const msgRes = await axios.post(
         'https://chat.botpress.cloud/v1/messages',
         {
@@ -111,13 +110,13 @@ app.post('/chatwoot-webhook', async (req, res) => {
         }
       );
       const sentMsgId = msgRes.data?.message?.id;
-      console.log(`[2/4] Mensaje entregado a Botpress. Esperando respuesta del agente...`);
+      console.log(`[2/4] Mensaje entregado a Botpress (ID: ${sentMsgId}). Esperando respuesta...`);
 
-      // 4. Esperar y recoger la respuesta del bot
+      // 4. Polling
       const botReply = await pollBotpressResponse(userKey, bpConvId, sentMsgId);
 
       if (botReply) {
-        console.log(`[3/4] Respuesta generada por Botpress: "${botReply.substring(0, 45)}..."`);
+        console.log(`[3/4] Respuesta detectada: "${botReply.substring(0, 45)}..."`);
         await axios.post(
           `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
           {
@@ -134,7 +133,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
         );
         console.log(`[4/4] ¡Mensaje entregado a Chatwoot con éxito!`);
       } else {
-        console.log('Botpress no generó respuesta a tiempo.');
+        console.log('Botpress no retornó mensaje en el tiempo esperado.');
       }
     } catch (err) {
       console.error('Error en el puente:', err.response?.data || err.message);
