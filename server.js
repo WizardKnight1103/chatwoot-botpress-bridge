@@ -13,10 +13,10 @@ app.get('/', (req, res) => {
   res.send('Servidor Webhook Puente Activo');
 });
 
-// Función para consultar la respuesta generada por Botpress (Polling)
-async function pollBotpressResponse(userKey, conversationId, maxAttempts = 10) {
+// Función de polling para esperar la respuesta generada por el agente
+async function pollBotpressResponse(userKey, conversationId, userMessageId, maxAttempts = 12) {
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     try {
       const res = await axios.get(
@@ -29,16 +29,16 @@ async function pollBotpressResponse(userKey, conversationId, maxAttempts = 10) {
       );
 
       const messages = res.data?.messages || [];
-      // Filtrar mensajes que no sean del usuario y que tengan texto
+      // Filtrar mensajes que provengan del bot y tengan contenido de texto
       const botMessages = messages.filter(
-        (m) => m.userId !== res.data?.userId && m.payload?.text
+        (m) => m.id !== userMessageId && m.userId !== res.data?.userId && m.payload?.text
       );
 
       if (botMessages.length > 0) {
-        return botMessages[botMessages.length - 1].payload.text;
+        return botMessages[0].payload.text;
       }
     } catch (e) {
-      // Continuar reintentando si aún no está lista la respuesta
+      // Continuar esperando si la respuesta aún no termina de generarse
     }
   }
   return null;
@@ -65,34 +65,36 @@ app.post('/chatwoot-webhook', async (req, res) => {
     try {
       console.log(`[1/4] Mensaje entrante: "${userMessage}" (Chatwoot Conv: ${conversationId})`);
 
-      // 1. Obtener / Crear usuario en Botpress Webchat
+      // 1. Obtener / Crear usuario de Webchat vinculado al Client ID
       const userRes = await axios.post(
         'https://chat.botpress.cloud/v1/users',
         {},
         {
           headers: {
             'x-user-key': `cw_user_${senderId}`,
+            'x-bp-client': WEBCHAT_CLIENT_ID,
             'Content-Type': 'application/json'
           }
         }
       );
       const userKey = userRes.data?.key;
 
-      // 2. Obtener / Crear conversación en Botpress
+      // 2. Obtener / Crear conversación
       const convRes = await axios.post(
         'https://chat.botpress.cloud/v1/conversations',
         {},
         {
           headers: {
             'x-user-key': userKey,
+            'x-bp-client': WEBCHAT_CLIENT_ID,
             'Content-Type': 'application/json'
           }
         }
       );
       const bpConvId = convRes.data?.conversation?.id;
 
-      // 3. Enviar mensaje a Botpress
-      await axios.post(
+      // 3. Enviar mensaje del usuario a Botpress
+      const msgRes = await axios.post(
         'https://chat.botpress.cloud/v1/messages',
         {
           conversationId: bpConvId,
@@ -108,13 +110,14 @@ app.post('/chatwoot-webhook', async (req, res) => {
           }
         }
       );
-      console.log(`[2/4] Mensaje entregado a Botpress. Esperando respuesta...`);
+      const sentMsgId = msgRes.data?.message?.id;
+      console.log(`[2/4] Mensaje entregado a Botpress. Esperando respuesta del agente...`);
 
-      // 4. Polling para obtener la respuesta del bot y enviarla a Chatwoot
-      const botReply = await pollBotpressResponse(userKey, bpConvId);
+      // 4. Esperar y recoger la respuesta del bot
+      const botReply = await pollBotpressResponse(userKey, bpConvId, sentMsgId);
 
       if (botReply) {
-        console.log(`[3/4] Respuesta generada por Botpress: "${botReply.substring(0, 40)}..."`);
+        console.log(`[3/4] Respuesta generada por Botpress: "${botReply.substring(0, 45)}..."`);
         await axios.post(
           `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
           {
@@ -129,7 +132,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
             }
           }
         );
-        console.log(`[4/4] ¡Respuesta enviada a Chatwoot con éxito!`);
+        console.log(`[4/4] ¡Mensaje entregado a Chatwoot con éxito!`);
       } else {
         console.log('Botpress no generó respuesta a tiempo.');
       }
