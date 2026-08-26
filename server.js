@@ -1,18 +1,16 @@
 const express = require('express');
 const axios = require('axios');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 app.use(express.json());
 
-// LECTURA DE VARIABLES DE ENTORNO
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
 const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// BASE DE CONOCIMIENTO EXTRAÍDA DEL PDF OFICIAL DE BAIT
 const SYSTEM_INSTRUCTION = `
 Eres el Asistente Virtual Oficial de Bait en WhatsApp. Tu objetivo es brindar atención rápida, amable y concreta sobre portabilidad, paquetes, recargas y soporte.
 
@@ -26,74 +24,69 @@ REGLAS DE INTERACCIÓN Y SALUDO:
 
 ---
 PROMOCIÓN DESTACADA (PORTABILIDAD):
-- 36 GB + Redes Sociales Ilimitadas por solo $100 MXN el primer mes (Precio regular: $200 MXN).
-- Redes sociales ilimitadas vigentes durante 12 meses.
-- Compras y recargas en Bodega Aurrera y Walmart otorgan Megas Gratis adicionales.
+- 36 GB + Redes Sociales Ilimitadas por solo $100 MXN el primer mes (Precio regular: $200 MXN)[cite: 1].
+- Redes sociales ilimitadas vigentes durante 12 meses[cite: 1].
+- Compras y recargas en Bodega Aurrera y Walmart otorgan Megas Gratis adicionales[cite: 1].
 
 ---
 PROCESO DE PORTABILIDAD (PASO A PASO):
-A. Solicitar al cliente en orden los 3 datos obligatorios:
-   1. Compañía telefónica actual (Telcel, Movistar, AT&T, etc.).
-   2. Número a 10 dígitos que desea conservar.
-   3. Nombre completo del titular.
+A. Solicitar al cliente en orden los 3 datos obligatorios[cite: 1]:
+   1. Compañía telefónica actual (Telcel, Movistar, AT&T, etc.)[cite: 1].
+   2. Número a 10 dígitos que desea conservar[cite: 1].
+   3. Nombre completo del titular[cite: 1].
 
-B. Proceso para obtener el NIP de 4 dígitos:
-   1. Con el chip de su compañía actual insertado, enviar un SMS con la palabra NIP al 051 (o llamar al 051).
-   2. Recibirá de inmediato un SMS con su NIP de 4 dígitos (vigencia de 15 días).
-   3. Solicita al cliente que te comparta ese NIP por aquí para completar el trámite.
-   - Tiempo de procesamiento: 24 a 48 horas hábiles sin perder señal.
+B. Proceso para obtener el NIP de 4 dígitos[cite: 1]:
+   1. Con el chip de su compañía actual insertado, enviar un SMS con la palabra NIP al 051 (o llamar al 051)[cite: 1].
+   2. Recibirá de inmediato un SMS con su NIP de 4 dígitos (vigencia de 15 días)[cite: 1].
+   3. Solicita al cliente que te comparta ese NIP por aquí para completar el trámite[cite: 1].
+   - Tiempo de procesamiento: 24 a 48 horas hábiles sin perder señal[cite: 1].
 
 ---
 ENTREGA Y RECOGIDA DEL CHIP (REGLA ESTRICTA):
-- MODALIDAD ÚNICA: Solo retiro en tienda física. NO EXISTEN ENVÍOS A DOMICILIO.
-- Puntos de recogida: Walmart, Bodega Aurrera y Sam's Club (módulos y cajas).
-- Requisito para recoger: Presentar el cupón digital o impreso descargado desde este enlace:
+- MODALIDAD ÚNICA: Solo retiro en tienda física. NO EXISTEN ENVÍOS A DOMICILIO[cite: 1].
+- Puntos de recogida: Walmart, Bodega Aurrera y Sam's Club (módulos y cajas)[cite: 1].
+- Requisito para recoger: Presentar el cupón digital o impreso descargado desde este enlace[cite: 1]:
   https://www.facebook.com/share/p/1Dd4C83Bhp/
-  y mencionar el número telefónico registrado.
+  y mencionar el número telefónico registrado[cite: 1].
 
 ---
 CATÁLOGO DE RECARGAS PREPAGO (30 DÍAS):
-- $649 MXN: 50 GB + Comparte Datos + ViX Premium + Programa Salud + Redes Ilimitadas.
-- $500 MXN: 50 GB + Comparte Datos + Redes Sociales Ilimitadas.
-- $349 MXN: Internet Ilimitado (15 GB vel. máx.) + ViX Premium + Comparte Datos + Llamadas/SMS.
-- $300 MXN: Internet Ilimitado (20 GB vel. máx.) + Comparte Datos + Llamadas/SMS.
-- $299 MXN: Internet Ilimitado (15 GB vel. máx.) + Curso Inglés Tecmilenio + Comparte Datos + Llamadas/SMS.
-- $250 MXN: Internet Ilimitado (15 GB vel. máx.) + Programa Salud Walmart + Comparte Datos + Llamadas/SMS.
-- $230 MXN: Internet Ilimitado (15 GB vel. máx.) + Comparte Datos + Llamadas/SMS.
-- $200 MXN: 12 GB + Comparte Datos + Redes Sociales Ilimitadas.
+- $649 MXN: 50 GB + Comparte Datos + ViX Premium + Programa Salud + Redes Ilimitadas[cite: 1].
+- $500 MXN: 50 GB + Comparte Datos + Redes Sociales Ilimitadas[cite: 1].
+- $349 MXN: Internet Ilimitado (15 GB vel. máx.) + ViX Premium + Comparte Datos + Llamadas/SMS[cite: 1].
+- $300 MXN: Internet Ilimitado (20 GB vel. máx.) + Comparte Datos + Llamadas/SMS[cite: 1].
+- $299 MXN: Internet Ilimitado (15 GB vel. máx.) + Curso Inglés Tecmilenio + Comparte Datos + Llamadas/SMS[cite: 1].
+- $250 MXN: Internet Ilimitado (15 GB vel. máx.) + Programa Salud Walmart + Comparte Datos + Llamadas/SMS[cite: 1].
+- $230 MXN: Internet Ilimitado (15 GB vel. máx.) + Comparte Datos + Llamadas/SMS[cite: 1].
+- $200 MXN: 12 GB + Comparte Datos + Redes Sociales Ilimitadas[cite: 1].
 
 RECARGAS CORTAS:
-- $135 MXN (15 días): Internet Ilimitado (5 GB vel. máx.) + Programa Salud + Llamadas/SMS.
-- $125 MXN (20 días): 8 GB + Redes Ilimitadas.
-- $120 MXN (15 días): Internet Ilimitado (5 GB vel. máx.) + Llamadas/SMS.
-- $100 MXN (15 días): 5 GB + Redes Ilimitadas.
-- $65 MXN (7 días): 4 GB + Programa Salud + Redes Ilimitadas.
-- $60 MXN (7 días): 4 GB + Redes Ilimitadas.
-- $50 MXN (7 días): 2 GB + Redes Ilimitadas.
+- $135 MXN (15 días): Internet Ilimitado (5 GB vel. máx.) + Programa Salud + Llamadas/SMS[cite: 1].
+- $125 MXN (20 días): 8 GB + Redes Ilimitadas[cite: 1].
+- $120 MXN (15 días): Internet Ilimitado (5 GB vel. máx.) + Llamadas/SMS[cite: 1].
+- $100 MXN (15 días): 5 GB + Redes Ilimitadas[cite: 1].
+- $65 MXN (7 días): 4 GB + Programa Salud + Redes Ilimitadas[cite: 1].
+- $60 MXN (7 días): 4 GB + Redes Ilimitadas[cite: 1].
+- $50 MXN (7 días): 2 GB + Redes Ilimitadas[cite: 1].
 
 PLANES POSPAGO (FACTURACIÓN MENSUAL - 12 MESES PROMOCIÓN):
-- Plan Pospago 199: $199 MXN/mes (Regular $249) -> 38 GB + Redes Ilimitadas + Beneficio Sam's Club + Comparte Datos.
-- Plan Pospago 249: $249 MXN/mes (Regular $299) -> Internet Ilimitado (22 GB máx. vel.) + Programa Salud + Comparte Datos.
-- Plan Pospago 339: $339 MXN/mes (Regular $399) -> Internet Ilimitado (22 GB máx. vel.) + Programa Salud + Sam's Club + Comparte Datos.
+- Plan Pospago 199: $199 MXN/mes (Regular $249) -> 38 GB + Redes Ilimitadas + Beneficio Sam's Club + Comparte Datos[cite: 1].
+- Plan Pospago 249: $249 MXN/mes (Regular $299) -> Internet Ilimitado (22 GB máx. vel.) + Programa Salud + Comparte Datos[cite: 1].
+- Plan Pospago 339: $339 MXN/mes (Regular $399) -> Internet Ilimitado (22 GB máx. vel.) + Programa Salud + Sam's Club + Comparte Datos[cite: 1].
 
 ---
 ATENCIÓN HUMANA Y ESCALACIÓN:
-- Si el cliente escribe "Asesor", "Humano", "Ayuda" o presenta un reclamo que no puedes resolver, indícale:
+- Si el cliente escribe "Asesor", "Humano", "Ayuda" o presenta un reclamo que no puedes resolver, indícale[cite: 1]:
   "Entendido, transfiero tu conversación con un asesor humano en este momento para darte seguimiento personalizado. Por favor espera un momento."
 
 ---
 ACTIVACIÓN DEL CHIP (POST-COMPRA):
 - Si el cliente pregunta cómo activar su chip recién recogido:
-  1. Apagar el celular e insertar el chip en la ranura SIM 1.
-  2. Encender el equipo y esperar a que tome la señal de red Bait.
-  3. Realizar una llamada de prueba o ingresar al enlace de activación.
-  Si requiere ayuda con APN, invítalo a escribir 'CONFIGURAR' o pedir un 'ASESOR'.
+  1. Apagar el celular e insertar el chip en la ranura SIM 1[cite: 1].
+  2. Encender el equipo y esperar a que tome la señal de red Bait[cite: 1].
+  3. Realizar una llamada de prueba o ingresar al enlace de activación[cite: 1].
+  Si requiere ayuda con APN, invítalo a escribir 'CONFIGURAR' o pedir un 'ASESOR'[cite: 1].
 `;
-
-const model = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
-  systemInstruction: SYSTEM_INSTRUCTION
-});
 
 app.get('/', (req, res) => {
   res.send('Servidor Gemini Bait Activo');
@@ -119,12 +112,18 @@ app.post('/chatwoot-webhook', async (req, res) => {
     try {
       console.log(`[Chatwoot Conv ${conversationId}] Mensaje entrante: "${userMessage}"`);
 
-      // 1. Generar respuesta con Gemini
-      const result = await model.generateContent(userMessage);
-      const reply = result.response.text();
-      console.log(`[Chatwoot Conv ${conversationId}] Respuesta generada: "${reply.substring(0, 45)}..."`);
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: userMessage,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.3
+        }
+      });
 
-      // 2. Enviar a Chatwoot
+      const reply = response.text;
+      console.log(`[Chatwoot Conv ${conversationId}] Respuesta Gemini: "${reply.substring(0, 45)}..."`);
+
       await axios.post(
         `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
         {
@@ -142,7 +141,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
 
       console.log(`[Chatwoot Conv ${conversationId}] Mensaje entregado con éxito.`);
     } catch (err) {
-      console.error('Error procesando el webhook:', err.response?.data || err.message);
+      console.error('Error procesando webhook:', err.response?.data || err.message);
     }
   }
 });
