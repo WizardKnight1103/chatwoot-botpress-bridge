@@ -111,7 +111,7 @@ app.post('/chatwoot-webhook', async (req, res) => {
       console.log(`[Chatwoot Conv ${conversationId}] Mensaje entrante: "${userMessage}"`);
 
       // Llamada REST directa a la API de Gemini
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
       
       const payload = {
         contents: [
