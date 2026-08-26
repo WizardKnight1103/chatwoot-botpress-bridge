@@ -7,8 +7,8 @@ app.use(express.json());
 
 // REEMPLAZA CON TUS CREDENCIALES
 const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
-const CHATWOOT_API_TOKEN = 'NnagcztzUX8BcAmKcEE9SSo4';
-const GEMINI_API_KEY = 'AQ.Ab8RN6KWLvmL8a25XvJ7hdhsZEmVjEb-5ZWNTf9NACExumAviw';
+const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
