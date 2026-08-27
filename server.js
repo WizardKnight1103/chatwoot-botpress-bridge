@@ -1,15 +1,16 @@
-const express = require('express');
-const axios = require('axios');
-
-const app = express();
-app.use(express.json());
-
-const CHATWOOT_BASE_URL = 'https://app.chatwoot.com';
-const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN;
-const LINK_CUPON = 'https://www.facebook.com/share/p/1Dd4C83Bhp/';
-
 function procesarRespuesta(texto) {
   const msg = (texto || '').toLowerCase().trim();
+
+  // 0. Comando inicial de Telegram o saludo directo
+  if (msg === '/start' || msg === 'start' || msg === 'hola' || msg === 'inicio') {
+    return `¡Hola! Bienvenido al canal de atención oficial de Bait. 💙\n\n` +
+      `🔥 *Promoción Portabilidad:* 36 GB + Redes Ilimitadas por solo *$100 MXN* el primer mes.\n\n` +
+      `Elige una opción respondiendo con el *número* o palabra:\n` +
+      `1️⃣ *Portabilidad* (Cambiar tu línea conservando tu número)\n` +
+      `2️⃣ *Recargas y Paquetes* (Ver catálogo de precios y vigencias)\n` +
+      `3️⃣ *Cupón y Tiendas* (Dónde y cómo recoger tu chip)\n` +
+      `4️⃣ *Hablar con un asesor*`;
+  }
 
   // 1. Asesor / Humano / Ayuda
   if (msg.includes('asesor') || msg.includes('humano') || msg.includes('ayuda') || msg === '4') {
@@ -75,7 +76,7 @@ function procesarRespuesta(texto) {
       `Si tienes problemas con datos móviles o APN, escribe *ASESOR* para apoyarte.`;
   }
 
-  // Saludo y Menú Inicial por defecto
+  // Menú por defecto si escribe cualquier otra cosa
   return `¡Hola! Bienvenido al canal de atención oficial de Bait. 💙\n\n` +
     `🔥 *Promoción Portabilidad:* 36 GB + Redes Ilimitadas por solo *$100 MXN* el primer mes.\n\n` +
     `Elige una opción respondiendo con el *número* o palabra:\n` +
@@ -84,56 +85,3 @@ function procesarRespuesta(texto) {
     `3️⃣ *Cupón y Tiendas* (Dónde y cómo recoger tu chip)\n` +
     `4️⃣ *Hablar con un asesor*`;
 }
-
-app.get('/', (req, res) => {
-  res.send('Servidor Bait Bot Activo');
-});
-
-app.post('/chatwoot-webhook', async (req, res) => {
-  res.status(200).send('OK');
-
-  const event = req.body;
-
-  if (
-    event &&
-    event.event === 'message_created' &&
-    event.message_type === 'incoming' &&
-    !event.private
-  ) {
-    const userMessage = event.content;
-    const conversationId = event.conversation?.id;
-    const accountId = event.account?.id;
-
-    if (!userMessage || !conversationId || !accountId) return;
-
-    try {
-      console.log(`[Chatwoot Conv ${conversationId}] Mensaje entrante: "${userMessage}"`);
-
-      const reply = procesarRespuesta(userMessage);
-
-      await axios.post(
-        `${CHATWOOT_BASE_URL}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
-        {
-          content: reply,
-          message_type: 'outgoing',
-          private: false
-        },
-        {
-          headers: {
-            api_access_token: CHATWOOT_API_TOKEN,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      console.log(`[Chatwoot Conv ${conversationId}] Mensaje entregado con éxito a Chatwoot.`);
-    } catch (err) {
-      console.error('Error enviando mensaje a Chatwoot:', err.response?.data || err.message);
-    }
-  }
-});
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor activo en el puerto ${PORT}`);
-});
