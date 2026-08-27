@@ -1,16 +1,20 @@
+const express = require('express');
+const axios = require('axios');
+
+const app = express();
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN || '';
+const LINK_CUPON = process.env.LINK_CUPON || 'https://bit.ly/cupon-bait';
+
+// Ruta de prueba para verificar que el servidor vive
+app.get('/', (req, res) => {
+  res.send('Servidor Webhook Bait Activo 🚀');
+});
+
 function procesarRespuesta(texto) {
   const msg = (texto || '').toLowerCase().trim();
-
-  // 0. Comando inicial de Telegram o saludo directo
-  if (msg === '/start' || msg === 'start' || msg === 'hola' || msg === 'inicio') {
-    return `¡Hola! Bienvenido al canal de atención oficial de Bait. 💙\n\n` +
-      `🔥 *Promoción Portabilidad:* 36 GB + Redes Ilimitadas por solo *$100 MXN* el primer mes.\n\n` +
-      `Elige una opción respondiendo con el *número* o palabra:\n` +
-      `1️⃣ *Portabilidad* (Cambiar tu línea conservando tu número)\n` +
-      `2️⃣ *Recargas y Paquetes* (Ver catálogo de precios y vigencias)\n` +
-      `3️⃣ *Cupón y Tiendas* (Dónde y cómo recoger tu chip)\n` +
-      `4️⃣ *Hablar con un asesor*`;
-  }
 
   // 1. Asesor / Humano / Ayuda
   if (msg.includes('asesor') || msg.includes('humano') || msg.includes('ayuda') || msg === '4') {
@@ -67,7 +71,7 @@ function procesarRespuesta(texto) {
       `Escribe *Activar* si ya tienes tu chip y necesitas configurarlo.`;
   }
 
-  // 5. Activación / Configurar APN
+  // 5. Activación / APN
   if (msg.includes('activar') || msg.includes('configurar') || msg.includes('apn') || msg.includes('señal')) {
     return `⚙️ *Activación de tu Chip Bait*\n\n` +
       `1. Apaga tu celular e inserta el chip en la ranura *SIM 1*.\n` +
@@ -76,7 +80,7 @@ function procesarRespuesta(texto) {
       `Si tienes problemas con datos móviles o APN, escribe *ASESOR* para apoyarte.`;
   }
 
-  // Menú por defecto si escribe cualquier otra cosa
+  // Menú por defecto (para /start, hola, o cualquier otro texto)
   return `¡Hola! Bienvenido al canal de atención oficial de Bait. 💙\n\n` +
     `🔥 *Promoción Portabilidad:* 36 GB + Redes Ilimitadas por solo *$100 MXN* el primer mes.\n\n` +
     `Elige una opción respondiendo con el *número* o palabra:\n` +
@@ -85,3 +89,52 @@ function procesarRespuesta(texto) {
     `3️⃣ *Cupón y Tiendas* (Dónde y cómo recoger tu chip)\n` +
     `4️⃣ *Hablar con un asesor*`;
 }
+
+// Endpoint del webhook para Chatwoot
+app.post('/chatwoot-webhook', async (req, res) => {
+  console.log('--- EVENTO RECIBIDO DE CHATWOOT ---');
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+
+  const payload = req.body;
+
+  // Solo procesar mensajes entrantes (enviados por el usuario/cliente)
+  // message_type: 0 = incoming (cliente), 1 = outgoing (agente/bot)
+  if (payload.event === 'message_created' && payload.message_type === 'incoming') {
+    const accountId = payload.account?.id || '182581';
+    const conversationId = payload.conversation?.id;
+    const content = payload.content;
+
+    console.log(`[Conv ${conversationId}] Mensaje entrante: "${content}"`);
+
+    const botResponse = procesarRespuesta(content);
+
+    try {
+      const url = `https://app.chatwoot.com/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
+      
+      const response = await axios.post(
+        url,
+        {
+          content: botResponse,
+          message_type: 'outgoing',
+          private: false
+        },
+        {
+          headers: {
+            api_access_token: CHATWOOT_API_TOKEN,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log(`[Conv ${conversationId}] Mensaje entregado con éxito a Chatwoot (Status: ${response.status})`);
+    } catch (err) {
+      console.error(`[Conv ${conversationId}] Error enviando a Chatwoot:`, err.response?.status, err.response?.data || err.message);
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor webhook corriendo en el puerto ${PORT}`);
+});
